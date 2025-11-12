@@ -1,0 +1,19 @@
+# Xmake cache
+.xmake/
+build/
+
+# MacOS Cache
+.DS_Store
+
+
+# clangd cache
+.cache/
+.vscode/
+.clangd/
+.clang-format
+compile_commands.json
+
+# cmake cache
+CMakeCache.txt
+CMakeFiles/
+Makefile

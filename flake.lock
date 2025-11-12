@@ -1,0 +1,46 @@
+{
+  "nodes": {
+    "idxd-config": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1753977205,
+        "narHash": "sha256-uV6cOha+g5fZBq+ucrNmfUW+3gQzX9BKGYvYaeCYv40=",
+        "ref": "stable",
+        "rev": "b78f65f5d342643815124d36a52023fda4a945e3",
+        "revCount": 608,
+        "type": "git",
+        "url": "https://github.com/intel/idxd-config.git"
+      },
+      "original": {
+        "ref": "stable",
+        "rev": "b78f65f5d342643815124d36a52023fda4a945e3",
+        "type": "git",
+        "url": "https://github.com/intel/idxd-config.git"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1762896836,
+        "narHash": "sha256-7nZjczLKfKE5oIdXHnjxY3xTrUxgkbT0JnxTZm6mjaU=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "bee1c5a592c2adb705b44666b071b1e558119ab2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "bee1c5a592c2adb705b44666b071b1e558119ab2",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "idxd-config": "idxd-config",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
