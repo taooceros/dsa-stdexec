@@ -17,3 +17,8 @@ compile_commands.json
 CMakeCache.txt
 CMakeFiles/
 Makefile
+
+
+#direnv
+.envrc
+.direnv/

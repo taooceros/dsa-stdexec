@@ -26,7 +26,7 @@
     in
     {
 
-      packages.${system}.idxd-config-package = pkgs.stdenv.mkDerivation {
+      idxd-config-package = pkgs.stdenv.mkDerivation {
         pname = "idxd-config";
         version = "unstable";
         src = idxd-config;
@@ -68,13 +68,19 @@
       };
 
       devShells.${system}.default = pkgs.mkShell {
-        packages = [
-          pkgs.gcc15
-          pkgs.xmake
-          self.packages.${system}.idxd-config-package
+        packages = with pkgs; [
+          gcc15
+          xmake
+          llvmPackages.libstdcxxClang
+          llvmPackages.clang-tools
+          self.idxd-config-package
+          cmake
+          aria2
+          llvmPackages.bintools
+          gcc15.cc.lib
         ];
 
-        buildInputs = with pkgs; [
+        nativeBuildInputs = with pkgs; [
           libuuid
           json_c
           libtool
@@ -84,6 +90,13 @@
           asciidoc
           which
           xmlto
+          fmt_12
+          cmake
+          ninja
+          llvmPackages.bintools
+          llvmPackages.libstdcxxClang
+          llvmPackages.clang-tools
+          gcc15.cc.lib
         ];
       };
     };
