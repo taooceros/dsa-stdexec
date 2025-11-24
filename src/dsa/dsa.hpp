@@ -3,11 +3,32 @@
 #define DSA_INIT_HPP
 
 #include <cstddef>
+#include <memory>
 
 extern "C" {
 #include <accel-config/libaccel_config.h>
 #include <linux/idxd.h>
 }
+
+struct AccfgCtxDeleter {
+  void operator()(accfg_ctx *ctx) const noexcept { accfg_unref(ctx); }
+};
+
+class AccfgCtx {
+public:
+  AccfgCtx() {
+    accfg_ctx *ctx = nullptr;
+    if (accfg_new(&ctx) != 0 || ctx == nullptr) {
+      throw std::runtime_error("accfg_new failed to create libaccfg context");
+    }
+    ctx_.reset(ctx);
+  }
+
+  accfg_ctx *get() const noexcept { return ctx_.get(); }
+
+private:
+  std::unique_ptr<accfg_ctx, AccfgCtxDeleter> ctx_;
+};
 
 class Dsa {
 public:
@@ -16,10 +37,10 @@ public:
 
   void data_move(void *src, void *dst, size_t size);
 
-  constexpr accfg_ctx *context() const noexcept { return ctx_; }
+  constexpr AccfgCtx const &context() const noexcept { return ctx_; }
 
 private:
-  accfg_ctx *ctx_;
+  AccfgCtx ctx_;
 
   accfg_wq *wq_;
 

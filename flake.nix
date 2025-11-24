@@ -23,10 +23,11 @@
         config = { };
         overlays = [ ];
       };
+      stdenv = pkgs.impureUseNativeOptimizations pkgs.stdenv;
     in
     {
 
-      idxd-config-package = pkgs.stdenv.mkDerivation {
+      idxd-config-package = stdenv.mkDerivation {
         pname = "idxd-config";
         version = "unstable";
         src = idxd-config;
@@ -68,6 +69,9 @@
       };
 
       devShells.${system}.default = pkgs.mkShell {
+
+        NIX_ENFORCE_NO_NATIVE = "0";
+
         packages = with pkgs; [
           gcc15
           xmake
@@ -96,6 +100,7 @@
           llvmPackages.bintools
           llvmPackages.libstdcxxClang
           llvmPackages.clang-tools
+          stdenv
           gcc15.cc.lib
         ];
       };

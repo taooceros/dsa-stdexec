@@ -4,25 +4,33 @@
 #include "fmt/base.h"
 #include <cerrno>
 #include <climits>
+#include <cstdint>
 #include <fcntl.h>
 #include <fmt/format.h>
 #include <stdexcept>
 #include <sys/mman.h>
 #include <system_error>
 #include <unistd.h>
+#include <x86intrin.h>
 
-Dsa::Dsa() : ctx_(nullptr), wq_(nullptr), wq_portal_(nullptr) {
-  if (accfg_new(&ctx_) != 0 || ctx_ == nullptr) {
-    throw std::runtime_error("accfg_new failed to create libaccfg context");
-  }
+#define WQ_PORTAL_SIZE 4096
 
+static inline unsigned int enqcmd(void *dst, const void *src) {
+  return _enqcmd(dst, src);
+}
+
+static uint8_t op_status(uint8_t status) {
+  return status & DSA_COMP_STATUS_MASK;
+}
+
+Dsa::Dsa() : ctx_(), wq_(nullptr), wq_portal_(nullptr) {
   try {
-    accfg_ctx *ctx = context();
+    auto &ctx = context();
     accfg_device *device = nullptr;
     accfg_wq *wq = nullptr;
     int device_count = 0;
     int total_wq_count = 0;
-    accfg_device_foreach(ctx, device) {
+    accfg_device_foreach(ctx.get(), device) {
       device_count++;
       const char *devname = accfg_device_get_devname(device);
       int dev_id = accfg_device_get_id(device);
@@ -43,10 +51,11 @@ Dsa::Dsa() : ctx_(nullptr), wq_(nullptr), wq_portal_(nullptr) {
         auto state = accfg_wq_get_state(wq);
         uint64_t max_xfer = accfg_wq_get_max_transfer_size(wq);
         unsigned int max_batch = accfg_wq_get_max_batch_size(wq);
+        auto ats_disable = accfg_wq_get_ats_disable(wq);
         fmt::println("  WQ {0} ({1}) type={2} mode={3} state={4} max_xfer={5} "
-                     "max_batch={6}",
+                     "max_batch={6} ats_disable={7}",
                      accfg_wq_get_id(wq), wq_name, wq_type, mode, state,
-                     max_xfer, max_batch);
+                     max_xfer, max_batch, ats_disable);
 
         if (accfg_wq_get_type(wq) != ACCFG_WQT_USER) {
           continue;
@@ -100,17 +109,28 @@ Dsa::~Dsa() {
     munmap(wq_portal_, kWqPortalSize);
     wq_portal_ = nullptr;
   }
-
-  if (ctx_) {
-    accfg_unref(ctx_);
-    ctx_ = nullptr;
-  }
 }
 
 void Dsa::data_move(void *src, void *dst, size_t size) {
-  struct dsa_completion_record comp __attribute__((aligned(32)));
+  if (size == 0) {
+    return;
+  }
 
-  struct dsa_hw_desc desc = {};
+  if (wq_portal_ == nullptr) {
+    throw std::runtime_error("DSA work queue portal is not mapped");
+  }
+
+  if (src == nullptr || dst == nullptr) {
+    throw std::invalid_argument("DSA data_move received a null pointer");
+  }
+
+  if (size > UINT32_MAX) {
+    throw std::invalid_argument(
+        "DSA data_move size exceeds the maximum transfer length");
+  }
+
+  struct dsa_completion_record comp __attribute__((aligned(32))) = {};
+  struct dsa_hw_desc desc __attribute__((aligned(64))) = {};
 
   desc.opcode = DSA_OPCODE_MEMMOVE;
 
@@ -120,13 +140,43 @@ void Dsa::data_move(void *src, void *dst, size_t size) {
 
   desc.flags |= IDXD_OP_FLAG_CC; // ddio?
 
-  desc.xfer_size = size;
+  desc.xfer_size = static_cast<uint32_t>(size);
   desc.src_addr = reinterpret_cast<uint64_t>(src);
   desc.dst_addr = reinterpret_cast<uint64_t>(dst);
 
-  comp.status = 0;
-
   desc.completion_addr = reinterpret_cast<uint64_t>(&comp);
+
+retry:
+  __builtin_memset(&comp, 0, sizeof(comp));
+
+  _mm_sfence();
+
+  constexpr int kEnqueueSpinLimit = 1 << 20;
+  int enqueue_attempts = 0;
+  while (enqcmd(wq_portal_, &desc) != 0) {
+    if (++enqueue_attempts >= kEnqueueSpinLimit) {
+      throw std::runtime_error(
+          "DSA portal busy while submitting descriptor");
+    }
+    _mm_pause();
+  }
+
+  constexpr int kCompletionSpinLimit = 1 << 24;
+  int completion_spins = 0;
+  while (comp.status == 0) {
+    _mm_pause();
+    if (++completion_spins >= kCompletionSpinLimit) {
+      throw std::runtime_error("Timed out waiting for DSA completion");
+    }
+  }
+
+  uint8_t status_code = op_status(comp.status);
+  if (status_code == DSA_COMP_SUCCESS) {
+    return;
+  }
+
+  throw std::runtime_error(
+      fmt::format("DSA data move failed (status=0x{:02x})", status_code));
 }
 
 void *Dsa::map_wq(accfg_wq *wq) {
@@ -144,7 +194,7 @@ void *Dsa::map_wq(accfg_wq *wq) {
     return MAP_FAILED;
   }
 
-  void *portal = mmap(nullptr, kWqPortalSize, PROT_WRITE,
+  void *portal = mmap(nullptr, WQ_PORTAL_SIZE, PROT_WRITE,
                       MAP_SHARED | MAP_POPULATE, fd, 0);
   std::error_code mmap_error;
   if (portal == MAP_FAILED) {
