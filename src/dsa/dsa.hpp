@@ -44,6 +44,8 @@ private:
 
   accfg_wq *wq_;
 
+  enum accfg_wq_mode mode_;
+
   void *wq_portal_;
 
   static constexpr std::size_t kWqPortalSize = 0x1000;

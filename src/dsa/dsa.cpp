@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <fcntl.h>
 #include <fmt/format.h>
+#include <immintrin.h>
 #include <stdexcept>
 #include <sys/mman.h>
 #include <system_error>
@@ -14,10 +15,6 @@
 #include <x86intrin.h>
 
 #define WQ_PORTAL_SIZE 4096
-
-static inline unsigned int enqcmd(void *dst, const void *src) {
-  return _enqcmd(dst, src);
-}
 
 static uint8_t op_status(uint8_t status) {
   return status & DSA_COMP_STATUS_MASK;
@@ -77,6 +74,7 @@ Dsa::Dsa() : ctx_(), wq_(nullptr), wq_portal_(nullptr) {
 
         wq_ = wq;
         wq_portal_ = portal;
+        mode_ = mode;
 
         fmt::println("  Mapped WQ portal for {0} at {1}", wq_name, portal);
         break;
@@ -151,23 +149,22 @@ retry:
 
   _mm_sfence();
 
-  constexpr int kEnqueueSpinLimit = 1 << 20;
-  int enqueue_attempts = 0;
-  while (enqcmd(wq_portal_, &desc) != 0) {
-    if (++enqueue_attempts >= kEnqueueSpinLimit) {
-      throw std::runtime_error(
-          "DSA portal busy while submitting descriptor");
+  if (mode_ == ACCFG_WQ_DEDICATED) {
+    _movdir64b(wq_portal_, &desc);
+  } else {
+    constexpr int kEnqueueSpinLimit = 1 << 20;
+    int enqueue_attempts = 0;
+
+    while (_enqcmd(wq_portal_, &desc) != 0) {
+      if (++enqueue_attempts >= kEnqueueSpinLimit) {
+        throw std::runtime_error("DSA portal busy while submitting descriptor");
+      }
+      _mm_pause();
     }
-    _mm_pause();
   }
 
-  constexpr int kCompletionSpinLimit = 1 << 24;
-  int completion_spins = 0;
   while (comp.status == 0) {
     _mm_pause();
-    if (++completion_spins >= kCompletionSpinLimit) {
-      throw std::runtime_error("Timed out waiting for DSA completion");
-    }
   }
 
   uint8_t status_code = op_status(comp.status);
