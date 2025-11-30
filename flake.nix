@@ -79,8 +79,6 @@
         src = stdexec;
 
         nativeBuildInputs = with pkgs; [
-          cmake
-          ninja
           pkg-config
         ];
 
