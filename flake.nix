@@ -7,6 +7,10 @@
       url = "git+https://github.com/intel/idxd-config.git?ref=stable&rev=b78f65f5d342643815124d36a52023fda4a945e3";
       flake = false;
     };
+    stdexec = {
+      url = "git+https://github.com/NVIDIA/stdexec.git?rev=7bb7b5b6d26e5ccedd88a2d7a131e86b58270108";
+      flake = false;
+    };
   };
 
   outputs =
@@ -14,6 +18,7 @@
       self,
       nixpkgs,
       idxd-config,
+      stdexec,
       ...
     }:
     let
@@ -68,6 +73,23 @@
         '';
       };
 
+      stdexec-package = stdenv.mkDerivation {
+        pname = "stdexec";
+        version = "unstable";
+        src = stdexec;
+
+        nativeBuildInputs = with pkgs; [
+          cmake
+          ninja
+          pkg-config
+        ];
+
+        installPhase = ''
+          mkdir -p $out/include
+          cp -r include/* $out/include/
+        '';
+      };
+
       devShells.${system}.default = pkgs.mkShell {
 
         NIX_ENFORCE_NO_NATIVE = "0";
@@ -82,6 +104,7 @@
           aria2
           llvmPackages.bintools
           gcc15.cc.lib
+          self.stdexec-package
         ];
 
         nativeBuildInputs = with pkgs; [
@@ -102,6 +125,7 @@
           llvmPackages.clang-tools
           stdenv
           gcc15.cc.lib
+          self.stdexec-package
         ];
       };
     };

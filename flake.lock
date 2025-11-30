@@ -37,7 +37,25 @@
     "root": {
       "inputs": {
         "idxd-config": "idxd-config",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "stdexec": "stdexec"
+      }
+    },
+    "stdexec": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1764366813,
+        "narHash": "sha256-8jYEbWI5NkJ9d9wU7rqCtP9sZhTNw78RsFF60F3C7G0=",
+        "ref": "refs/heads/main",
+        "rev": "7bb7b5b6d26e5ccedd88a2d7a131e86b58270108",
+        "revCount": 2579,
+        "type": "git",
+        "url": "https://github.com/NVIDIA/stdexec.git"
+      },
+      "original": {
+        "rev": "7bb7b5b6d26e5ccedd88a2d7a131e86b58270108",
+        "type": "git",
+        "url": "https://github.com/NVIDIA/stdexec.git"
       }
     }
   },

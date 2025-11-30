@@ -4,6 +4,8 @@
 #include "dsa/dsa.hpp"
 #include "fmt/base.h"
 
+#include <stdexec/concepts.hpp>
+
 int main() {
   Dsa dsa;
 
