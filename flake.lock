@@ -34,10 +34,28 @@
         "type": "github"
       }
     },
+    "proxy": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1763613296,
+        "narHash": "sha256-vBG9TCXJ8gTmg1dUtij33IKLonkaADucGBE1t6R0ZqE=",
+        "ref": "refs/heads/main",
+        "rev": "f88a3a3bcf0f5e87b5817a3619753a982885ef82",
+        "revCount": 200,
+        "type": "git",
+        "url": "https://github.com/microsoft/proxy.git"
+      },
+      "original": {
+        "rev": "f88a3a3bcf0f5e87b5817a3619753a982885ef82",
+        "type": "git",
+        "url": "https://github.com/microsoft/proxy.git"
+      }
+    },
     "root": {
       "inputs": {
         "idxd-config": "idxd-config",
         "nixpkgs": "nixpkgs",
+        "proxy": "proxy",
         "stdexec": "stdexec"
       }
     },

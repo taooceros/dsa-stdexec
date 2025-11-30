@@ -11,6 +11,10 @@
       url = "git+https://github.com/NVIDIA/stdexec.git?rev=7bb7b5b6d26e5ccedd88a2d7a131e86b58270108";
       flake = false;
     };
+    proxy = {
+      url = "git+https://github.com/microsoft/proxy.git?rev=f88a3a3bcf0f5e87b5817a3619753a982885ef82";
+      flake = false;
+    };
   };
 
   outputs =
@@ -19,6 +23,7 @@
       nixpkgs,
       idxd-config,
       stdexec,
+      proxy,
       ...
     }:
     let
@@ -73,13 +78,30 @@
         '';
       };
 
-      stdexec-package = stdenv.mkDerivation {
+      stdexec-pkg = stdenv.mkDerivation {
         pname = "stdexec";
         version = "unstable";
         src = stdexec;
 
         nativeBuildInputs = with pkgs; [
           pkg-config
+        ];
+
+        installPhase = ''
+          mkdir -p $out/include
+          cp -r include/* $out/include/
+        '';
+      };
+
+      proxy-pkg = stdenv.mkDerivation {
+        pname = "proxy";
+        version = "unstable";
+        src = proxy;
+
+        nativeBuildInputs = with pkgs; [
+          pkg-config
+          # cmake
+          # ninja
         ];
 
         installPhase = ''
@@ -102,7 +124,7 @@
           aria2
           llvmPackages.bintools
           gcc15.cc.lib
-          self.stdexec-package
+          self.stdexec-pkg
         ];
 
         nativeBuildInputs = with pkgs; [
@@ -123,7 +145,8 @@
           llvmPackages.clang-tools
           stdenv
           gcc15.cc.lib
-          self.stdexec-package
+          self.stdexec-pkg
+          self.proxy-pkg
         ];
       };
     };

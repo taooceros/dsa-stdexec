@@ -207,3 +207,58 @@ void *Dsa::map_wq(accfg_wq *wq) {
 
   return portal;
 }
+
+void Dsa::submit(dsa_stdexec::OperationBase *op, dsa_hw_desc *desc) {
+  if (wq_portal_ == nullptr) {
+    throw std::runtime_error("DSA work queue portal is not mapped");
+  }
+
+  op->next = head_;
+  head_ = op;
+
+  // We need to ensure the completion record is zeroed out before submission
+  // This is handled by the caller (OperationState)
+
+  _mm_sfence();
+
+  if (mode_ == ACCFG_WQ_DEDICATED) {
+    _movdir64b(wq_portal_, desc);
+  } else {
+    constexpr int kEnqueueSpinLimit = 1 << 20;
+    int enqueue_attempts = 0;
+
+    while (_enqcmd(wq_portal_, desc) != 0) {
+      if (++enqueue_attempts >= kEnqueueSpinLimit) {
+        throw std::runtime_error("DSA portal busy while submitting descriptor");
+      }
+      _mm_pause();
+    }
+  }
+}
+
+void Dsa::submit(dsa_stdexec::OperationBase *op) {
+  op->next = head_;
+  head_ = op;
+}
+
+void Dsa::poll() {
+  dsa_stdexec::OperationBase **pprev = &head_;
+  dsa_stdexec::OperationBase *curr = head_;
+
+  while (curr != nullptr) {
+    if (curr->proxy->check_completion()) {
+      // Remove from list
+      *pprev = curr->next;
+
+      // Notify completion (this might destroy the operation state)
+      curr->proxy->notify();
+
+      // Move to next (pprev stays the same because we removed curr)
+      curr = *pprev;
+    } else {
+      // Move to next
+      pprev = &curr->next;
+      curr = curr->next;
+    }
+  }
+}

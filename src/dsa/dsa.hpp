@@ -10,6 +10,8 @@ extern "C" {
 #include <linux/idxd.h>
 }
 
+#include <dsa_stdexec/operation_base.hpp>
+
 struct AccfgCtxDeleter {
   void operator()(accfg_ctx *ctx) const noexcept { accfg_unref(ctx); }
 };
@@ -39,6 +41,10 @@ public:
 
   constexpr AccfgCtx const &context() const noexcept { return ctx_; }
 
+  void submit(dsa_stdexec::OperationBase *op, dsa_hw_desc *desc);
+  void submit(dsa_stdexec::OperationBase *op);
+  void poll();
+
 private:
   AccfgCtx ctx_;
 
@@ -51,6 +57,8 @@ private:
   static constexpr std::size_t kWqPortalSize = 0x1000;
 
   void *map_wq(accfg_wq *wq);
+
+  dsa_stdexec::OperationBase *head_ = nullptr;
 
   Dsa(const Dsa &) = delete;
   Dsa &operator=(const Dsa &) = delete;
