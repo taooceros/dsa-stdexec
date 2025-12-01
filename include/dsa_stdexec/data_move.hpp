@@ -1,4 +1,5 @@
 #pragma once
+#include <cstring>
 #ifndef DSA_STDEXEC_DATA_MOVE_HPP
 #define DSA_STDEXEC_DATA_MOVE_HPP
 
@@ -13,7 +14,7 @@
 
 namespace dsa_stdexec {
 
-template <class ReceiverId> class DataMoveOperation : public OperationBase {
+template <class ReceiverId> class DataMoveOperation {
   using Receiver = stdexec::__t<ReceiverId>;
 
 public:
@@ -25,16 +26,12 @@ public:
   };
 
   DataMoveOperation(Dsa &dsa, void *src, void *dst, size_t size, Receiver r)
-      : dsa_(dsa), src_(src), dst_(dst), size_(size), r_(std::move(r)) {
-    this->proxy = pro::make_proxy<OperationFacade>(Wrapper{this});
-  }
+      : dsa_(dsa), src_(src), dst_(dst), size_(size), r_(std::move(r)) {}
 
   DataMoveOperation(DataMoveOperation &&other) noexcept
-      : OperationBase(), dsa_(other.dsa_), src_(other.src_), dst_(other.dst_),
+      : dsa_(other.dsa_), src_(other.src_), dst_(other.dst_),
         size_(other.size_), r_(std::move(other.r_)), desc_(other.desc_),
-        comp_(other.comp_) {
-    this->proxy = pro::make_proxy<OperationFacade>(Wrapper{this});
-  }
+        comp_(other.comp_) {}
 
   void start() noexcept {
     desc_.opcode = DSA_OPCODE_MEMMOVE;
@@ -45,10 +42,13 @@ public:
     desc_.completion_addr = reinterpret_cast<uint64_t>(&comp_);
 
     // Zero out completion record
-    __builtin_memset(&comp_, 0, sizeof(comp_));
+    memset(&comp_, 0, sizeof(comp_));
+
+    // Initialize the proxy hook
+    hook_.proxy = pro::make_proxy<OperationFacade>(Wrapper{this});
 
     try {
-      dsa_.submit(this, &desc_);
+      dsa_.submit(&hook_, &desc_);
     } catch (...) {
       stdexec::set_error(std::move(r_), std::current_exception());
     }
@@ -76,6 +76,7 @@ private:
   Receiver r_;
   dsa_hw_desc desc_ __attribute__((aligned(64))) = {};
   dsa_completion_record comp_ __attribute__((aligned(32))) = {};
+  OperationBase hook_;
 };
 
 class DataMoveSender {

@@ -2,8 +2,11 @@
 #ifndef DSA_INIT_HPP
 #define DSA_INIT_HPP
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 extern "C" {
 #include <accel-config/libaccel_config.h>
@@ -59,6 +62,9 @@ private:
   void *map_wq(accfg_wq *wq);
 
   dsa_stdexec::OperationBase *head_ = nullptr;
+  std::mutex head_mutex_;
+  std::thread poller_;
+  std::atomic<bool> running_{false};
 
   Dsa(const Dsa &) = delete;
   Dsa &operator=(const Dsa &) = delete;

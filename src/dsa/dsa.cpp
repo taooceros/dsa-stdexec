@@ -96,6 +96,16 @@ Dsa::Dsa() : ctx_(), wq_(nullptr), wq_portal_(nullptr) {
       throw std::runtime_error(
           "Failed to locate and map a usable user work queue portal");
     }
+
+    running_ = true;
+    poller_ = std::thread([this] {
+      while (running_) {
+        poll();
+        // Yield to avoid burning CPU too much if idle
+        std::this_thread::yield();
+      }
+    });
+
   } catch (const std::exception &ex) {
     fmt::println("Error: {0}", ex.what());
     throw;
@@ -103,6 +113,11 @@ Dsa::Dsa() : ctx_(), wq_(nullptr), wq_portal_(nullptr) {
 }
 
 Dsa::~Dsa() {
+  running_ = false;
+  if (poller_.joinable()) {
+    poller_.join();
+  }
+
   if (wq_portal_ != nullptr) {
     munmap(wq_portal_, kWqPortalSize);
     wq_portal_ = nullptr;
@@ -213,8 +228,11 @@ void Dsa::submit(dsa_stdexec::OperationBase *op, dsa_hw_desc *desc) {
     throw std::runtime_error("DSA work queue portal is not mapped");
   }
 
-  op->next = head_;
-  head_ = op;
+  {
+    std::lock_guard<std::mutex> lock(head_mutex_);
+    op->next = head_;
+    head_ = op;
+  }
 
   // We need to ensure the completion record is zeroed out before submission
   // This is handled by the caller (OperationState)
@@ -237,28 +255,42 @@ void Dsa::submit(dsa_stdexec::OperationBase *op, dsa_hw_desc *desc) {
 }
 
 void Dsa::submit(dsa_stdexec::OperationBase *op) {
+  std::lock_guard<std::mutex> lock(head_mutex_);
   op->next = head_;
   head_ = op;
 }
 
 void Dsa::poll() {
-  dsa_stdexec::OperationBase **pprev = &head_;
-  dsa_stdexec::OperationBase *curr = head_;
+  dsa_stdexec::OperationBase *completed_head = nullptr;
 
-  while (curr != nullptr) {
-    if (curr->proxy->check_completion()) {
-      // Remove from list
-      *pprev = curr->next;
+  {
+    std::lock_guard<std::mutex> lock(head_mutex_);
+    dsa_stdexec::OperationBase **pprev = &head_;
+    dsa_stdexec::OperationBase *curr = head_;
 
-      // Notify completion (this might destroy the operation state)
-      curr->proxy->notify();
+    while (curr != nullptr) {
+      if (curr->proxy->check_completion()) {
+        // Remove from list
+        *pprev = curr->next;
 
-      // Move to next (pprev stays the same because we removed curr)
-      curr = *pprev;
-    } else {
-      // Move to next
-      pprev = &curr->next;
-      curr = curr->next;
+        // Add to completed list
+        curr->next = completed_head;
+        completed_head = curr;
+
+        // Move to next (pprev stays the same because we removed curr)
+        curr = *pprev;
+      } else {
+        // Move to next
+        pprev = &curr->next;
+        curr = curr->next;
+      }
     }
+  }
+
+  // Notify outside the lock
+  while (completed_head != nullptr) {
+    dsa_stdexec::OperationBase *curr = completed_head;
+    completed_head = curr->next;
+    curr->proxy->notify();
   }
 }

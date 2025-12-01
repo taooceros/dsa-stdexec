@@ -2,7 +2,7 @@
   description = "Development shell with gcc15 and xmake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/bee1c5a592c2adb705b44666b071b1e558119ab2";
+    nixpkgs.url = "github:NixOS/nixpkgs/0f2f740139ea83741ba38413ce427b0e222467e3";
     idxd-config = {
       url = "git+https://github.com/intel/idxd-config.git?ref=stable&rev=b78f65f5d342643815124d36a52023fda4a945e3";
       flake = false;
@@ -110,27 +110,28 @@
         '';
       };
 
-      devShells.${system}.default = pkgs.mkShell {
+      devShells.${system}.default = pkgs.mkShellNoCC {
 
         NIX_ENFORCE_NO_NATIVE = "0";
 
         packages = with pkgs; [
+          clang-tools
           gcc15
           xmake
-          llvmPackages.libstdcxxClang
-          llvmPackages.clang-tools
           self.idxd-config-package
           cmake
           aria2
           llvmPackages.bintools
-          gcc15.cc.lib
           self.stdexec-pkg
+          self.proxy-pkg
         ];
 
         nativeBuildInputs = with pkgs; [
+          clang-tools
           libuuid
           json_c
           libtool
+          gcc15Stdenv
           autoconf
           automake
           pkg-config
@@ -141,13 +142,17 @@
           cmake
           ninja
           llvmPackages.bintools
-          llvmPackages.libstdcxxClang
-          llvmPackages.clang-tools
-          stdenv
-          gcc15.cc.lib
+          gcc15
           self.stdexec-pkg
           self.proxy-pkg
         ];
+
+        shellHook = ''
+          export CXX=g++-15
+          export CC=gcc-15
+          echo "${pkgs.gcc15.cc}/include/c++/$GCC_VERSION:${pkgs.gcc15.cc}/include/c++/$GCC_VERSION/x86_64-unknown-linux-gnu:$CPLUS_INCLUDE_PATH"
+        '';
+
       };
     };
 }
