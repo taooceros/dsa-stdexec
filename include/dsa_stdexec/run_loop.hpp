@@ -77,37 +77,29 @@ public:
     auto operator==(const Scheduler &) const noexcept -> bool = default;
 
     struct ScheduleTask {
-      using __t = ScheduleTask;
-      using __id = ScheduleTask;
       using sender_concept = stdexec::sender_t;
       using completion_signatures =
           completion_signatures_<stdexec::set_value_t(),
                                  stdexec::set_error_t(std::exception_ptr),
                                  stdexec::set_stopped_t()>;
 
-    private:
-      friend Scheduler;
-
       template <class Receiver>
       using operation_t = Operation<stdexec::__id<Receiver>>::task;
-
-      template <class Receiver>
-      friend auto tag_invoke(stdexec::connect_t, ScheduleTask self,
-                             Receiver receiver) {
-        return self.connect(static_cast<Receiver &&>(receiver));
+      auto connect(stdexec::receiver auto receiver)
+          -> operation_t<decltype(receiver)> {
+        return {&loop_->head_, loop_,
+                static_cast<decltype(receiver) &&>(receiver)};
       }
 
-      template <class Receiver> auto connect(Receiver receiver) const {
-        return operation_t<Receiver>{&loop_->head_, loop_,
-                                     static_cast<Receiver &&>(receiver)};
-      }
+    private:
+      friend Scheduler;
 
       struct Env {
         PollingRunLoop *loop_;
 
         template <class CPO>
-        friend auto tag_invoke(stdexec::get_completion_scheduler_t<CPO>,
-                               const Env &self) noexcept -> Scheduler {
+        friend auto query(stdexec::get_completion_scheduler_t<CPO>,
+                          const Env &self) noexcept -> Scheduler {
           return self.loop_->get_scheduler();
         }
       };

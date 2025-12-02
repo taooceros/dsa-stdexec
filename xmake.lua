@@ -1,15 +1,17 @@
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.release", "mode.profile")
 
 add_requires("libaccel-config", {system = true})
 add_requires("fmt", {system = true})
 add_requires("stdexec", {system = true})
 add_requires("proxy", {system = true})
+add_requires("cpptrace", {system = true})
 
 set_languages("c++23")
 
 add_includedirs("include", "src")
 
 
+add_syslinks("stdc++exp")
 target("dsa-stdexec")
     set_kind("binary")
     add_files("src/**.cpp")

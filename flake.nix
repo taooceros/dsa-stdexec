@@ -1,5 +1,5 @@
 {
-  description = "Development shell with gcc15 and xmake";
+  description = "Development shell xmake";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/0f2f740139ea83741ba38413ce427b0e222467e3";
@@ -33,6 +33,7 @@
         config = { };
         overlays = [ ];
       };
+      gcc15 = pkgs.gcc15;
       stdenv = pkgs.impureUseNativeOptimizations pkgs.stdenv;
     in
     {
@@ -43,7 +44,6 @@
         src = idxd-config;
 
         nativeBuildInputs = with pkgs; [
-          gcc15
           xmake
           libtool
           autoconf
@@ -55,6 +55,7 @@
           libuuid
           json_c
           autoreconfHook
+          gcc15
         ];
 
         patchPhase = ''
@@ -110,49 +111,56 @@
         '';
       };
 
-      devShells.${system}.default = pkgs.mkShellNoCC {
+      devShells.${system}.default =
+        pkgs.mkShellNoCC.override
+          {
+            stdenv = pkgs.gcc15.stdenv;
+          }
+          {
+            hardeningDisable = [ "fortify" ];
 
-        NIX_ENFORCE_NO_NATIVE = "0";
+            NIX_ENFORCE_NO_NATIVE = "0";
 
-        packages = with pkgs; [
-          clang-tools
-          gcc15
-          xmake
-          self.idxd-config-package
-          cmake
-          aria2
-          llvmPackages.bintools
-          self.stdexec-pkg
-          self.proxy-pkg
-        ];
+            packages = with pkgs; [
+              gcc15
+              xmake
+              self.idxd-config-package
+              cmake
+              aria2
+              llvmPackages.bintools
+              self.stdexec-pkg
+              self.proxy-pkg
+              cpptrace
+            ];
 
-        nativeBuildInputs = with pkgs; [
-          clang-tools
-          libuuid
-          json_c
-          libtool
-          gcc15Stdenv
-          autoconf
-          automake
-          pkg-config
-          asciidoc
-          which
-          xmlto
-          fmt_12
-          cmake
-          ninja
-          llvmPackages.bintools
-          gcc15
-          self.stdexec-pkg
-          self.proxy-pkg
-        ];
+            nativeBuildInputs = with pkgs; [
+              gcc15
+              libuuid
+              json_c
+              libtool
+              autoconf
+              automake
+              pkg-config
+              asciidoc
+              which
+              xmlto
+              fmt_12
+              cmake
+              ninja
+              llvmPackages.bintools
+              self.stdexec-pkg
+              self.proxy-pkg
+              cpptrace
+            ];
 
-        shellHook = ''
-          export CXX=g++-15
-          export CC=gcc-15
-          echo "${pkgs.gcc15.cc}/include/c++/$GCC_VERSION:${pkgs.gcc15.cc}/include/c++/$GCC_VERSION/x86_64-unknown-linux-gnu:$CPLUS_INCLUDE_PATH"
-        '';
+            shellHook = ''
+              # 1. Ask the wrapped GCC where its headers are
+              # 2. Clean up the output
+              # 3. Export to CPLUS_INCLUDE_PATH so clangd sees it
+              export CPLUS_INCLUDE_PATH=$(gcc -E -Wp,-v -xc++ /dev/null 2>&1 | grep '^ ' | awk '{print $1}' | tr '\n' ':')
 
-      };
+              echo "Updated CPLUS_INCLUDE_PATH for gcc15"
+            '';
+          };
     };
 }
