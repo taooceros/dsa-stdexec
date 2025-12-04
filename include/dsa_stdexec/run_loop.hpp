@@ -104,9 +104,10 @@ public:
         }
       };
 
-      friend auto tag_invoke(stdexec::get_env_t,
-                             const ScheduleTask &self) noexcept -> Env {
-        return Env{self.loop_};
+      auto get_env() const noexcept -> Env { return Env{loop_}; }
+
+      auto schedule() const noexcept -> ScheduleTask {
+        return ScheduleTask{loop_};
       }
 
       explicit ScheduleTask(PollingRunLoop *loop) noexcept : loop_(loop) {}
@@ -118,25 +119,20 @@ public:
 
     explicit Scheduler(PollingRunLoop *loop) noexcept : loop_(loop) {}
 
-    friend auto tag_invoke(stdexec::schedule_t, const Scheduler &self) noexcept
-        -> ScheduleTask {
-      return self.schedule();
+    auto schedule() const noexcept -> ScheduleTask {
+      fmt::println("schedule");
+      return ScheduleTask{loop_};
     }
 
-    friend auto tag_invoke(stdexec::get_forward_progress_guarantee_t,
-                           const Scheduler &) noexcept
+    friend auto query(stdexec::get_forward_progress_guarantee_t,
+                      const Scheduler &) noexcept
         -> stdexec::forward_progress_guarantee {
       return stdexec::forward_progress_guarantee::parallel;
     }
 
-    friend auto tag_invoke(stdexec::execute_may_block_caller_t,
-                           const Scheduler &) noexcept -> bool {
+    friend auto query(stdexec::execute_may_block_caller_t,
+                      const Scheduler &) noexcept -> bool {
       return false;
-    }
-
-    [[nodiscard]] auto schedule() const noexcept -> ScheduleTask {
-      fmt::println("schedule");
-      return ScheduleTask{loop_};
     }
 
     PollingRunLoop *loop_;
@@ -150,15 +146,16 @@ public:
     while (true) {
       Task *task = try_pop_front();
       if (task) {
+        fmt::println("execute");
         task->execute();
       } else {
         if (stop_) {
+          fmt::println("stop");
           break;
         }
         if (poll_) {
           poll_();
         }
-        std::this_thread::yield();
       }
     }
   }
@@ -194,6 +191,7 @@ private:
 template <class ReceiverId>
 inline void Operation<ReceiverId>::task::start() noexcept {
   try {
+    fmt::println("push_back");
     loop->push_back(this);
   } catch (...) {
     stdexec::set_error(static_cast<Receiver &&>(receiver),

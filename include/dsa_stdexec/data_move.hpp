@@ -1,5 +1,6 @@
 #pragma once
 #include <cstring>
+#include <print>
 #ifndef DSA_STDEXEC_DATA_MOVE_HPP
 #define DSA_STDEXEC_DATA_MOVE_HPP
 
@@ -50,8 +51,11 @@ public:
     try {
       dsa_.submit(&hook_, &desc_);
     } catch (...) {
+      std::println("DataMoveOperation failed");
       stdexec::set_error(std::move(r_), std::current_exception());
     }
+
+    std::println("DataMoveOperation started");
   }
 
   bool check_completion() { return comp_.status != 0; }
@@ -89,18 +93,9 @@ public:
   DataMoveSender(Dsa &dsa, void *src, void *dst, size_t size)
       : dsa_(dsa), src_(src), dst_(dst), size_(size) {}
 
-  template <stdexec::receiver Receiver>
-  friend auto tag_invoke(stdexec::connect_t, DataMoveSender &&self,
-                         Receiver &&r) {
-    return DataMoveOperation<stdexec::__id<Receiver>>(
-        self.dsa_, self.src_, self.dst_, self.size_, std::forward<Receiver>(r));
-  }
-
-  template <stdexec::receiver Receiver>
-  friend auto tag_invoke(stdexec::connect_t, const DataMoveSender &self,
-                         Receiver &&r) {
-    return DataMoveOperation<stdexec::__id<Receiver>>(
-        self.dsa_, self.src_, self.dst_, self.size_, std::forward<Receiver>(r));
+  auto connect(stdexec::receiver auto &&r) {
+    return DataMoveOperation<stdexec::__id<decltype(r)>>(
+        dsa_, src_, dst_, size_, std::forward<decltype(r)>(r));
   }
 
 private:
