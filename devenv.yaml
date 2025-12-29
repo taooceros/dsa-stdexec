@@ -2,9 +2,6 @@
 inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
-  stdexec:
-    url: github:nvidia/stdexec
-    flake: false
   proxy:
     url: github:microsoft/proxy
     flake: false
