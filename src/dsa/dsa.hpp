@@ -37,7 +37,7 @@ private:
 
 class Dsa {
 public:
-  Dsa();
+  explicit Dsa(bool start_poller = true);
   ~Dsa();
 
   void data_move(void *src, void *dst, size_t size);

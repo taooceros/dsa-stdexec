@@ -20,7 +20,7 @@ static uint8_t op_status(uint8_t status) {
   return status & DSA_COMP_STATUS_MASK;
 }
 
-Dsa::Dsa() : ctx_(), wq_(nullptr), wq_portal_(nullptr) {
+Dsa::Dsa(bool start_poller) : ctx_(), wq_(nullptr), wq_portal_(nullptr) {
   try {
     auto &ctx = context();
     accfg_device *device = nullptr;
@@ -97,14 +97,16 @@ Dsa::Dsa() : ctx_(), wq_(nullptr), wq_portal_(nullptr) {
           "Failed to locate and map a usable user work queue portal");
     }
 
-    running_ = true;
-    poller_ = std::thread([this] {
-      while (running_) {
-        poll();
-        // Yield to avoid burning CPU too much if idle
-        std::this_thread::yield();
-      }
-    });
+    if (start_poller) {
+      running_ = true;
+      poller_ = std::thread([this] {
+        while (running_) {
+          poll();
+          // Yield to avoid burning CPU too much if idle
+          std::this_thread::yield();
+        }
+      });
+    }
 
   } catch (const std::exception &ex) {
     fmt::println("Error: {0}", ex.what());
@@ -249,7 +251,6 @@ void Dsa::submit(dsa_stdexec::OperationBase *op, dsa_hw_desc *desc) {
       if (++enqueue_attempts >= kEnqueueSpinLimit) {
         throw std::runtime_error("DSA portal busy while submitting descriptor");
       }
-      _mm_pause();
     }
   }
 }

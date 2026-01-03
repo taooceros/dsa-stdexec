@@ -1,18 +1,14 @@
 #ifndef DSA_STDEXEC_RUN_LOOP_HPP
 #define DSA_STDEXEC_RUN_LOOP_HPP
 
-#include "fmt/base.h"
 #include <exception>
 #include <functional>
 #include <mutex>
-#include <stacktrace>
 #include <stdexec/execution.hpp>
-#include <thread>
+#include <type_traits>
 #include <utility>
 
 namespace dsa_stdexec {
-
-class PollingRunLoop;
 
 struct Task {
   Task *next = this;
@@ -24,52 +20,51 @@ struct Task {
   void execute() noexcept { (*execute_fn)(this); }
 };
 
-template <class ReceiverId> struct Operation {
-  using Receiver = stdexec::__t<ReceiverId>;
-
-  struct task : Task {
-    using __id = Operation;
-
-    PollingRunLoop *loop;
-    [[no_unique_address]] Receiver receiver;
-
-    static void execute_impl(Task *p) noexcept {
-      auto *op = static_cast<task *>(p);
-      try {
-        if (stdexec::get_stop_token(stdexec::get_env(op->receiver))
-                .stop_requested()) {
-          stdexec::set_stopped(static_cast<Receiver &&>(op->receiver));
-        } else {
-          stdexec::set_value(static_cast<Receiver &&>(op->receiver));
-        }
-      } catch (...) {
-        stdexec::set_error(static_cast<Receiver &&>(op->receiver),
-                           std::current_exception());
-      }
-    }
-
-    explicit task(Task *tail) noexcept : Task{.tail = tail} {}
-
-    task(Task *next, PollingRunLoop *loop, Receiver receiver)
-        : Task{next, {&execute_impl}}, loop(loop),
-          receiver(static_cast<Receiver &&>(receiver)) {}
-
-    friend void tag_invoke(stdexec::start_t, task &self) noexcept {
-      self.start();
-    }
-
-    void start() noexcept;
-  };
-};
-
-class PollingRunLoop {
+template <class PollFunc = std::function<void()>> class PollingRunLoop {
   template <class... Ts>
   using completion_signatures_ = stdexec::completion_signatures<Ts...>;
 
-  template <class> friend struct Operation;
-
 public:
-  using PollFunc = std::function<void()>;
+  template <class ReceiverId> struct Operation {
+    using Receiver = stdexec::__t<ReceiverId>;
+
+    struct task : Task {
+      using __id = Operation;
+
+      PollingRunLoop *loop;
+      [[no_unique_address]] Receiver receiver;
+
+      static void execute_impl(Task *p) noexcept {
+        auto *op = static_cast<task *>(p);
+        try {
+          if (stdexec::get_stop_token(stdexec::get_env(op->receiver))
+                  .stop_requested()) {
+            stdexec::set_stopped(static_cast<Receiver &&>(op->receiver));
+          } else {
+            stdexec::set_value(static_cast<Receiver &&>(op->receiver));
+          }
+        } catch (...) {
+          stdexec::set_error(static_cast<Receiver &&>(op->receiver),
+                             std::current_exception());
+        }
+      }
+
+      explicit task(Task *tail) noexcept : Task{.tail = tail} {}
+
+      task(Task *next, PollingRunLoop *loop, Receiver receiver)
+          : Task{next, {&execute_impl}}, loop(loop),
+            receiver(static_cast<Receiver &&>(receiver)) {}
+
+      void start() noexcept {
+        try {
+          loop->push_back(this);
+        } catch (...) {
+          stdexec::set_error(static_cast<Receiver &&>(receiver),
+                             std::current_exception());
+        }
+      }
+    };
+  };
 
   struct Scheduler {
     using __t = Scheduler;
@@ -84,7 +79,7 @@ public:
                                  stdexec::set_stopped_t()>;
 
       template <class Receiver>
-      using operation_t = Operation<stdexec::__id<Receiver>>::task;
+      using operation_t = typename Operation<stdexec::__id<Receiver>>::task;
       auto connect(stdexec::receiver auto receiver)
           -> operation_t<decltype(receiver)> {
         return {&loop_->head_, loop_,
@@ -120,7 +115,6 @@ public:
     explicit Scheduler(PollingRunLoop *loop) noexcept : loop_(loop) {}
 
     auto schedule() const noexcept -> ScheduleTask {
-      fmt::println("schedule");
       return ScheduleTask{loop_};
     }
 
@@ -138,22 +132,25 @@ public:
     PollingRunLoop *loop_;
   };
 
-  explicit PollingRunLoop(PollFunc poll = nullptr) : poll_(std::move(poll)) {}
+  explicit PollingRunLoop(PollFunc poll) : poll_(std::move(poll)) {}
+
+  PollingRunLoop()
+    requires std::is_default_constructible_v<PollFunc>
+      : poll_{} {}
 
   auto get_scheduler() noexcept -> Scheduler { return Scheduler{this}; }
 
   void run() {
-    while (true) {
+    while (!stop_) {
       Task *task = try_pop_front();
       if (task) {
-        fmt::println("execute");
         task->execute();
       } else {
-        if (stop_) {
-          fmt::println("stop");
-          break;
-        }
-        if (poll_) {
+        if constexpr (std::is_convertible_v<PollFunc, bool>) {
+          if (poll_) {
+            poll_();
+          }
+        } else {
           poll_();
         }
       }
@@ -163,6 +160,11 @@ public:
   void finish() {
     std::unique_lock lock{mutex_};
     stop_ = true;
+  }
+
+  void reset() {
+    std::unique_lock lock{mutex_};
+    stop_ = false;
   }
 
 private:
@@ -188,16 +190,7 @@ private:
   PollFunc poll_;
 };
 
-template <class ReceiverId>
-inline void Operation<ReceiverId>::task::start() noexcept {
-  try {
-    fmt::println("push_back");
-    loop->push_back(this);
-  } catch (...) {
-    stdexec::set_error(static_cast<Receiver &&>(receiver),
-                       std::current_exception());
-  }
-}
+template <class PollFunc> PollingRunLoop(PollFunc) -> PollingRunLoop<PollFunc>;
 
 } // namespace dsa_stdexec
 

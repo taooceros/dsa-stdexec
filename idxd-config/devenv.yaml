@@ -1,4 +1,4 @@
 inputs:
-  idxd-config:
-    url: github:intel/idxd-config
-    flake: false
+    idxd-config:
+        url: github:intel/idxd-config
+        flake: false

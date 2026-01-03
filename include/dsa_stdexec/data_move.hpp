@@ -1,6 +1,5 @@
 #pragma once
 #include <cstring>
-#include <print>
 #ifndef DSA_STDEXEC_DATA_MOVE_HPP
 #define DSA_STDEXEC_DATA_MOVE_HPP
 
@@ -17,22 +16,16 @@ namespace dsa_stdexec {
 
 template <class ReceiverId> class DataMoveOperation {
   using Receiver = stdexec::__t<ReceiverId>;
+  static_assert(!std::is_reference_v<Receiver>,
+                "Receiver must not be a reference");
 
 public:
   using operation_state_concept = stdexec::operation_state_t;
-  struct Wrapper {
-    DataMoveOperation *op;
-    bool check_completion() { return op->check_completion(); }
-    void notify() { op->notify(); }
-  };
 
   DataMoveOperation(Dsa &dsa, void *src, void *dst, size_t size, Receiver r)
       : dsa_(dsa), src_(src), dst_(dst), size_(size), r_(std::move(r)) {}
 
-  DataMoveOperation(DataMoveOperation &&other) noexcept
-      : dsa_(other.dsa_), src_(other.src_), dst_(other.dst_),
-        size_(other.size_), r_(std::move(other.r_)), desc_(other.desc_),
-        comp_(other.comp_) {}
+  DataMoveOperation(DataMoveOperation &&) = delete;
 
   void start() noexcept {
     desc_.opcode = DSA_OPCODE_MEMMOVE;
@@ -51,12 +44,16 @@ public:
     try {
       dsa_.submit(&hook_, &desc_);
     } catch (...) {
-      std::println("DataMoveOperation failed");
       stdexec::set_error(std::move(r_), std::current_exception());
     }
-
-    std::println("DataMoveOperation started");
   }
+
+private:
+  struct Wrapper {
+    DataMoveOperation *op;
+    bool check_completion() { return op->check_completion(); }
+    void notify() { op->notify(); }
+  };
 
   bool check_completion() { return comp_.status != 0; }
 
@@ -94,7 +91,7 @@ public:
       : dsa_(dsa), src_(src), dst_(dst), size_(size) {}
 
   auto connect(stdexec::receiver auto &&r) {
-    return DataMoveOperation<stdexec::__id<decltype(r)>>(
+    return DataMoveOperation<stdexec::__id<std::remove_cvref_t<decltype(r)>>>(
         dsa_, src_, dst_, size_, std::forward<decltype(r)>(r));
   }
 

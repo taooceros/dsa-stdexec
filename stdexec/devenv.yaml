@@ -1,4 +1,4 @@
 inputs:
-  stdexec:
-    url: github:nvidia/stdexec
-    flake: false
+    stdexec:
+        url: github:nvidia/stdexec
+        flake: false

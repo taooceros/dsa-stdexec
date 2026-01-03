@@ -1,0 +1,4 @@
+inputs:
+    proxy:
+        url: github:microsoft/proxy
+        flake: false

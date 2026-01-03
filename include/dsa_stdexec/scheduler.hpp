@@ -58,17 +58,15 @@ public:
   explicit ScheduleSender(Dsa &dsa) : dsa_(dsa) {}
 
   template <stdexec::receiver Receiver>
-  friend auto tag_invoke(stdexec::connect_t, ScheduleSender &&self,
-                         Receiver &&r) {
+  auto connect(Receiver &&r) && {
     return ScheduleOperation<stdexec::__id<Receiver>>(
-        self.dsa_, std::forward<Receiver>(r));
+        dsa_, std::forward<Receiver>(r));
   }
 
   template <stdexec::receiver Receiver>
-  friend auto tag_invoke(stdexec::connect_t, const ScheduleSender &self,
-                         Receiver &&r) {
+  auto connect(Receiver &&r) const & {
     return ScheduleOperation<stdexec::__id<Receiver>>(
-        self.dsa_, std::forward<Receiver>(r));
+        dsa_, std::forward<Receiver>(r));
   }
 
 private:
@@ -79,11 +77,6 @@ class DsaScheduler {
 public:
   using scheduler_concept = stdexec::scheduler_t;
   explicit DsaScheduler(Dsa &dsa) : dsa_(dsa) {}
-
-  friend ScheduleSender tag_invoke(stdexec::schedule_t,
-                                   const DsaScheduler &self) {
-    return ScheduleSender(self.dsa_);
-  }
 
   ScheduleSender schedule() const noexcept { return ScheduleSender(dsa_); }
 

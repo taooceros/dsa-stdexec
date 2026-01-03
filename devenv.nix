@@ -19,17 +19,34 @@
     };
   };
 
-  outputs = {
-  };
-
-  # https://devenv.sh/basics/
-  env.GREET = "devenv";
+  # 3. Environment Variables (The Fix)
+  # This ensures build systems use GCC 15 instead of the default stdenv compiler.
+  env.CC = "gcc";
+  env.CXX = "g++";
 
   # https://devenv.sh/packages/
   packages = with pkgs; [
     git
     gcc15
+    xmake
+    cmake
+    aria2
+    llvmPackages.bintools
+    cpptrace
+    libuuid
+    json_c
+    libtool
+    autoconf
+    automake
+    pkg-config
+    asciidoc
+    which
+    xmlto
+    fmt_12
+    ninja
   ];
+
+  env.NIX_ENFORCE_NO_NATIVE = "0";
 
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
@@ -47,8 +64,12 @@
 
   # https://devenv.sh/basics/
   enterShell = ''
-    hello         # Run scripts directly
-    git --version # Use packages
+    # 1. Ask the wrapped GCC where its headers are
+    # 2. Clean up the output
+    # 3. Export to CPLUS_INCLUDE_PATH so clangd sees it
+    export CPLUS_INCLUDE_PATH=$(gcc -E -Wp,-v -xc++ /dev/null 2>&1 | grep '^ ' | awk '{print $1}' | tr '\n' ':')
+
+    echo "Updated CPLUS_INCLUDE_PATH for gcc15"
   '';
 
   # https://devenv.sh/tasks/
