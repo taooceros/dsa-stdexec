@@ -10,14 +10,20 @@ let
     pname = "proxy";
     version = "unstable";
     src = inputs.proxy;
-    installPhase = ''
-      mkdir -p $out/include
-      cp -r $src/include $out/include
-    '';
+
+    nativeBuildInputs = with pkgs; [
+      gcc15
+      cmake
+      pkg-config
+      ninja
+    ];
 
   };
 in
 {
+  languages.c.enable = true;
+  languages.cplusplus.enable = true;
+
   packages = with pkgs; [
     proxy-package
   ];
